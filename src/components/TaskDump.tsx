@@ -1,102 +1,140 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Sparkles, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { Sparkles, Clipboard, Check, HelpCircle } from 'lucide-react';
 import { useTaskStore } from '@/store/useTaskStore';
 
 interface TaskDumpProps {
-  onProcess: (text: string) => void;
+  onProcess: (json: string) => void;
   isProcessing: boolean;
 }
 
 export default function TaskDump({ onProcess, isProcessing }: TaskDumpProps) {
-  const [text, setText] = useState('');
-  const [additionalText, setAdditionalText] = useState('');
-  const { originalText } = useTaskStore();
-  const MAX_LENGTH = 2000;
+  const [pastedJson, setPastedJson] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
+  const { tasks, clearTasks } = useTaskStore();
+
+  const PROMPT = `당신은 지능형 할 일 관리 전문 AI입니다. 사용자의 입력 문장에서 할 일들을 추출하고, 각 할 일의 특성에 맞춰 예상 소요 시간과 마감 기한을 분석하여 JSON 형식으로 반환하세요.
+
+추출 및 분석 규칙:
+1. title: 할 일 제목 (명명 규칙 준수 필수)
+   - **명확한 행동 중심**: 무엇을 해야 하는지 즉각적으로 알 수 있도록 명확한 행동 위주로 작성하세요.
+   - **명사형 어미 또는 동사 기본형**: 제목의 끝은 반드시 '명사형 어미(~기, ~함)'나 '동사 기본형'을 사용하세요.
+   - **간결함**: 불필요한 수식어나 문장 성분은 생략하고 핵심 행동 위주로 간결하게 작성하세요.
+   - **정보 분리**: 한 문장에 여러 행동이 포함된 경우 각각 독립된 할 일로 분리하세요.
+
+2. duration: 예상 소요 시간 (분 단위 숫자)
+   - 명시된 시간이 없다면 현실적인 시간을 예측하세요. (예: 물 마시기 5분, 환기 10분 등)
+
+3. deadline: 마감 기한 (ISO 8601 형식)
+   - 명확한 마감 기한이나 특정 시간 언급이 있는 경우에만 계산하여 입력하세요. 언급이 없는 경우 null로 설정하세요.
+   - 기준 시간: ${new Date().toLocaleString('ko-KR')}
+
+4. aiPriority: 1~10 사이의 중요도
+
+출력 형식 (반드시 JSON으로만 응답):
+{
+  "tasks": [
+    { "title": "할 일 제목", "duration": 10, "deadline": "ISO8601", "aiPriority": 5 }
+  ]
+}`;
+
+  const handleCopyPrompt = () => {
+    navigator.clipboard.writeText(PROMPT);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
 
   const handleSubmit = () => {
-    if (!text.trim() || text.length > MAX_LENGTH) return;
-    onProcess(text);
-    setText('');
+    if (!pastedJson.trim()) return;
+    onProcess(pastedJson);
+    setPastedJson('');
   };
-
-  const handleAdditionalSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!additionalText.trim()) return;
-    onProcess(additionalText);
-    setAdditionalText('');
-  };
-
-  if (originalText) {
-    return (
-      <div className="w-full max-w-2xl mx-auto space-y-6">
-        <div className="bg-white p-6 rounded-2xl border-2 border-slate-100 shadow-sm relative">
-          <div className="text-slate-600 whitespace-pre-wrap leading-relaxed">
-            {originalText}
-          </div>
-          <div className="absolute -top-3 left-4 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm flex items-center gap-1">
-            <Sparkles size={12} /> 작성한 내용
-          </div>
-        </div>
-
-        <form onSubmit={handleAdditionalSubmit} className="relative group">
-          <input
-            type="text"
-            className="w-full p-4 pl-5 pr-12 bg-white border-2 border-slate-200 rounded-xl shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none text-slate-700 placeholder:text-slate-400"
-            placeholder="추가로 할 일을 입력하세요."
-            value={additionalText}
-            onChange={(e) => setAdditionalText(e.target.value)}
-            disabled={isProcessing}
-          />
-          <button
-            type="submit"
-            disabled={isProcessing || !additionalText.trim()}
-            className={`absolute right-2 top-2 bottom-2 px-3 rounded-lg flex items-center justify-center transition-all ${
-              additionalText.trim() && !isProcessing
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-slate-100 text-slate-300'
-            }`}
-          >
-            {isProcessing ? (
-              <Sparkles size={18} className="animate-spin" />
-            ) : (
-              <Plus size={20} />
-            )}
-          </button>
-        </form>
-      </div>
-    );
-  }
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-4">
-      <div className="relative">
-        <textarea
-          className="w-full h-40 p-4 bg-white border-2 border-slate-200 rounded-2xl shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none resize-none text-slate-700 placeholder:text-slate-400"
-          placeholder="오늘 할 일들을 마음껏 적어보세요. 
-예: 오후 3시 회의 준비하기, 매일 30분 운동하기, 주말에 마트 장보기..."
-          value={text}
-          onChange={(e) => setText(e.target.value.slice(0, MAX_LENGTH))}
-          disabled={isProcessing}
-          maxLength={MAX_LENGTH}
-        />
-        <div className={`absolute bottom-4 right-4 text-xs ${text.length >= MAX_LENGTH ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
-          {text.length} / {MAX_LENGTH}자 (최대 {MAX_LENGTH}자)
+    <div className="w-full max-w-2xl mx-auto space-y-8">
+      {tasks.length > 0 && (
+        <div className="flex justify-end">
+          <button
+            onClick={clearTasks}
+            className="text-slate-400 hover:text-red-500 text-sm flex items-center gap-1 transition-colors"
+          >
+            목록 초기화
+          </button>
         </div>
+      )}
+
+      {/* Manual Section */}
+      <section className="bg-white p-6 rounded-2xl border-2 border-slate-100 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 text-blue-600 font-bold text-lg">
+          <HelpCircle size={24} />
+          <h2>사용 방법</h2>
+        </div>
+        
+        <ol className="space-y-4 text-slate-600 text-sm sm:text-base">
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">1</span>
+            <div>
+              <p className="font-semibold text-slate-900">분석 프롬프트를 복사하세요.</p>
+              <button
+                onClick={handleCopyPrompt}
+                className={`mt-2 flex items-center gap-2 px-4 py-2 rounded-lg transition-all border-2 ${
+                  isCopied 
+                    ? 'bg-green-50 border-green-200 text-green-600' 
+                    : 'bg-slate-50 border-slate-100 text-slate-600 hover:border-blue-200 hover:text-blue-600'
+                }`}
+              >
+                {isCopied ? <Check size={16} /> : <Clipboard size={16} />}
+                {isCopied ? '복사 완료!' : '프롬프트 복사하기'}
+              </button>
+            </div>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">2</span>
+            <div>
+              <p className="font-semibold text-slate-900">사용하시는 AI(ChatGPT, Claude 등)에게 붙여넣으세요.</p>
+              <p className="text-slate-500 text-xs mt-1">복사한 프롬프트를 입력한 뒤, 분석하고 싶은 할 일들을 자유롭게 적어주세요.</p>
+            </div>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">3</span>
+            <div>
+              <p className="font-semibold text-slate-900">AI의 답변(JSON)을 아래에 붙여넣으세요.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      {/* Paste Section */}
+      <div className="space-y-4">
+        <div className="relative">
+          <textarea
+            className="w-full h-48 p-4 bg-white border-2 border-slate-200 rounded-2xl shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none font-mono text-sm text-slate-700 placeholder:text-slate-400"
+            placeholder={`AI의 JSON 답변을 여기에 붙여넣으세요.
+예:
+{
+  "tasks": [
+    { "title": "회의 준비하기", ... }
+  ]
+}`}
+            value={pastedJson}
+            onChange={(e) => setPastedJson(e.target.value)}
+            disabled={isProcessing}
+          />
+        </div>
+        <button
+          onClick={handleSubmit}
+          disabled={isProcessing || !pastedJson.trim()}
+          className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all ${
+            isProcessing || !pastedJson.trim()
+              ? 'bg-slate-300 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 active:scale-[0.98]'
+          }`}
+        >
+          <Sparkles size={20} className={isProcessing ? 'animate-spin' : ''} />
+          {'할 일 목록 생성하기'}
+        </button>
       </div>
-      <button
-        onClick={handleSubmit}
-        disabled={isProcessing || !text.trim() || text.length > MAX_LENGTH}
-        className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all ${
-          isProcessing || !text.trim() || text.length > MAX_LENGTH
-            ? 'bg-slate-300 cursor-not-allowed'
-            : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 active:scale-[0.98]'
-        }`}
-      >
-        <Sparkles size={20} className={isProcessing ? 'animate-spin' : ''} />
-        {isProcessing ? 'AI가 분석 중...' : '정리하기'}
-      </button>
     </div>
   );
 }

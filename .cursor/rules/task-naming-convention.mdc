@@ -1,6 +1,6 @@
 ---
 description: 할 일(Task) 제목 명명 규칙
-globs: src/app/api/analyze/route.ts, src/types/task.ts, src/store/useTaskStore.ts
+globs: src/types/task.ts, src/store/useTaskStore.ts, src/components/TaskDump.tsx
 alwaysApply: true
 ---
 
@@ -26,5 +26,5 @@ alwaysApply: true
   - 보고서 작성
   - 기획안 제출
 
-## AI 프롬프트 적용 (src/app/api/analyze/route.ts)
-AI가 할 일을 추출할 때 위 규칙을 따르도록 프롬프트에 명시되어야 합니다.
+## AI 프롬프트 적용 (src/components/TaskDump.tsx)
+AI가 할 일을 추출할 때 위 규칙을 따르도록 프롬프트(TaskDump 내 PROMPT 상수)에 명시되어야 합니다.

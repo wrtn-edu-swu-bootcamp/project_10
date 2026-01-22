@@ -8,21 +8,23 @@ import { useTaskStore } from '@/store/useTaskStore';
 export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { addTasks, originalText, setOriginalText } = useTaskStore();
+  const { addTasks } = useTaskStore();
 
-  const handleProcess = async (text: string) => {
+  const handleProcess = async (jsonString: string) => {
     setIsProcessing(true);
     try {
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
+      // JSON 파싱 시도 (markdown 코드 블록 제거 등 전처리)
+      let cleanJson = jsonString.trim();
+      if (cleanJson.includes('```')) {
+        cleanJson = cleanJson.replace(/```json|```/g, '').trim();
+      }
 
-      if (!response.ok) throw new Error('Failed to analyze');
-
-      const data = await response.json();
+      const data = JSON.parse(cleanJson);
       
+      if (!data.tasks || !Array.isArray(data.tasks)) {
+        throw new Error('올바른 형식의 AI 답변이 아닙니다. "tasks" 배열이 포함되어야 합니다.');
+      }
+
       const newTasks = data.tasks.map((t: any) => ({
         ...t,
         id: Math.random().toString(36).substr(2, 9),
@@ -30,17 +32,10 @@ export default function Home() {
         createdAt: new Date().toISOString(),
       }));
 
-      // 원본 텍스트 저장 또는 추가
-      if (!originalText) {
-        setOriginalText(text);
-      } else {
-        setOriginalText(`${originalText}\n추가: ${text}`);
-      }
-
       addTasks(newTasks);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('분석 중 오류가 발생했습니다.');
+      alert(`할 일 목록을 생성하는 중 오류가 발생했습니다: ${error.message}\nAI의 답변이 JSON 형식인지 확인해주세요.`);
     } finally {
       setIsProcessing(false);
     }
@@ -55,7 +50,7 @@ export default function Home() {
             Smart <span className="text-blue-600">Todo</span>
           </h1>
           <p className="text-slate-500 text-lg">
-            생각나는 모든 할 일을 쏟아내세요. AI가 최적의 실행 순서를 찾아줍니다.
+            AI와 함께 할 일을 분석하고 최적의 실행 순서를 찾아보세요.
           </p>
         </header>
 
