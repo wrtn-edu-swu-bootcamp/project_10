@@ -23,10 +23,6 @@ export default function Home() {
 
       const data = await response.json();
       
-      if (data.isFallback) {
-        alert(data.message);
-      }
-
       const newTasks = data.tasks.map((t: any) => ({
         ...t,
         id: Math.random().toString(36).substr(2, 9),
