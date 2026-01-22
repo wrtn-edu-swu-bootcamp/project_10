@@ -10,6 +10,7 @@ interface TaskDumpProps {
 }
 
 export default function TaskDump({ onProcess, isProcessing }: TaskDumpProps) {
+  const [userInput, setUserInput] = useState('');
   const [pastedJson, setPastedJson] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const { tasks, clearTasks } = useTaskStore();
@@ -40,7 +41,8 @@ export default function TaskDump({ onProcess, isProcessing }: TaskDumpProps) {
 }`;
 
   const handleCopyPrompt = () => {
-    navigator.clipboard.writeText(PROMPT);
+    const textToCopy = `${userInput}\n\n---\n\n${PROMPT}`;
+    navigator.clipboard.writeText(textToCopy);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };
@@ -74,8 +76,22 @@ export default function TaskDump({ onProcess, isProcessing }: TaskDumpProps) {
         <ol className="space-y-4 text-slate-600 text-sm sm:text-base">
           <li className="flex gap-3">
             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">1</span>
+            <div className="flex-1">
+              <p className="font-semibold text-slate-900">할 일을 입력하세요.</p>
+              <textarea
+                className="w-full mt-2 p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
+                placeholder="예: 오늘 오후 3시에 회의하고, 저녁에 운동 가기"
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">2</span>
             <div>
-              <p className="font-semibold text-slate-900">분석 프롬프트를 복사하세요.</p>
+              <p className="font-semibold text-slate-900">복사하기를 누르세요.</p>
+              <p className="text-slate-500 text-xs mt-1">입력한 내용과 분석 프롬프트가 함께 복사됩니다.</p>
               <button
                 onClick={handleCopyPrompt}
                 className={`mt-2 flex items-center gap-2 px-4 py-2 rounded-lg transition-all border-2 ${
@@ -85,21 +101,22 @@ export default function TaskDump({ onProcess, isProcessing }: TaskDumpProps) {
                 }`}
               >
                 {isCopied ? <Check size={16} /> : <Clipboard size={16} />}
-                {isCopied ? '복사 완료!' : '프롬프트 복사하기'}
+                {isCopied ? '복사 완료!' : '복사하기'}
               </button>
-            </div>
-          </li>
-          <li className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">2</span>
-            <div>
-              <p className="font-semibold text-slate-900">사용하시는 AI(ChatGPT, Claude 등)에게 붙여넣으세요.</p>
-              <p className="text-slate-500 text-xs mt-1">복사한 프롬프트를 입력한 뒤, 분석하고 싶은 할 일들을 자유롭게 적어주세요.</p>
             </div>
           </li>
           <li className="flex gap-3">
             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">3</span>
             <div>
-              <p className="font-semibold text-slate-900">AI의 답변(JSON)을 아래에 붙여넣으세요.</p>
+              <p className="font-semibold text-slate-900">사용하시는 AI에 붙여넣으세요.</p>
+              <p className="text-slate-500 text-xs mt-1">ChatGPT, Claude, 뤼튼 등 AI에게 복사한 내용을 전달하세요.</p>
+            </div>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">4</span>
+            <div>
+              <p className="font-semibold text-slate-900">아래에 붙여넣으세요.</p>
+              <p className="text-slate-500 text-xs mt-1">AI의 JSON 답변을 아래 입력창에 붙여넣으세요.</p>
             </div>
           </li>
         </ol>

@@ -7,7 +7,7 @@ import { CheckCircle2, Circle, Clock, Calendar, Trash2 } from 'lucide-react';
 
 export default function TaskList() {
   const { tasks, toggleTask, deleteTask } = useTaskStore();
-  const [sortType, setSortType] = useState<SortType>('recommended');
+  const [sortType, setSortType] = useState<SortType>('quick');
 
   const getSortedTasks = (): Task[] => {
     const pendingTasks = tasks.filter(t => t.status === 'pending');
