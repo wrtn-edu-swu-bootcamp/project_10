@@ -20,7 +20,7 @@ export default function TaskDump({ onProcess, isProcessing }: TaskDumpProps) {
   const hasTasks = tasks.length > 0;
 
   const handleCopyPrompt = () => {
-    const prompt = getTaskExtractionPrompt();
+    const prompt = getTaskExtractionPrompt(tasks);
     const textToCopy = `${originalText}\n\n---\n\n${prompt}`;
     navigator.clipboard.writeText(textToCopy);
     setIsCopied(true);

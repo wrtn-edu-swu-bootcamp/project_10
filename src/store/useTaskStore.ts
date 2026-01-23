@@ -21,8 +21,9 @@ export const useTaskStore = create<TaskState>()(
       set((state) => ({ tasks: [...state.tasks, task] })),
     mergeTasks: (newTasks) =>
       set((state) => {
-        const existingTitles = new Set(state.tasks.map((t) => t.title));
-        const filteredNewTasks = newTasks.filter((t) => !existingTitles.has(t.title));
+        const normalize = (title: string) => title.replace(/\s+/g, '').trim();
+        const existingNormalizedTitles = new Set(state.tasks.map((t) => normalize(t.title)));
+        const filteredNewTasks = newTasks.filter((t) => !existingNormalizedTitles.has(normalize(t.title)));
         const combinedTasks = [...state.tasks, ...filteredNewTasks];
         
         // 추천 순서(aiPriority)로 전체 정렬하여 "끼워넣기" 구현
