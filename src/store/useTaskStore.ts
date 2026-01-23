@@ -5,10 +5,11 @@ interface TaskState {
   tasks: Task[];
   originalText: string;
   addTask: (task: Task) => void;
-  addTasks: (tasks: Task[]) => void;
+  mergeTasks: (newTasks: Task[]) => void;
   toggleTask: (id: string) => void;
   deleteTask: (id: string) => void;
-  clearTasks: () => void;
+  setTasks: (tasks: Task[]) => void;
+  updateTask: (id: string, updates: Partial<Task>) => void;
   setOriginalText: (text: string) => void;
 }
 
@@ -18,8 +19,18 @@ export const useTaskStore = create<TaskState>()(
     originalText: '',
     addTask: (task) =>
       set((state) => ({ tasks: [...state.tasks, task] })),
-    addTasks: (newTasks) =>
-      set((state) => ({ tasks: [...state.tasks, ...newTasks] })),
+    mergeTasks: (newTasks) =>
+      set((state) => {
+        const existingTitles = new Set(state.tasks.map((t) => t.title));
+        const filteredNewTasks = newTasks.filter((t) => !existingTitles.has(t.title));
+        const combinedTasks = [...state.tasks, ...filteredNewTasks];
+        
+        // 추천 순서(aiPriority)로 전체 정렬하여 "끼워넣기" 구현
+        // 완료된 항목은 뒤로 보낼지 여부는 TaskList의 getSortedTasks에서 처리하므로 여기선 우선순위만 고려
+        const sortedTasks = combinedTasks.sort((a, b) => b.aiPriority - a.aiPriority);
+        
+        return { tasks: [...sortedTasks] };
+      }),
     toggleTask: (id) =>
       set((state) => ({
         tasks: state.tasks.map((task) =>
@@ -32,7 +43,13 @@ export const useTaskStore = create<TaskState>()(
       set((state) => ({
         tasks: state.tasks.filter((task) => task.id !== id),
       })),
-    clearTasks: () => set({ tasks: [], originalText: '' }),
+    setTasks: (tasks) => set({ tasks }),
+    updateTask: (id, updates) =>
+      set((state) => ({
+        tasks: state.tasks.map((task) =>
+          task.id === id ? { ...task, ...updates } : task
+        ),
+      })),
     setOriginalText: (text) => set({ originalText: text }),
   })
 );

@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Clipboard, Check, HelpCircle } from 'lucide-react';
+import { Sparkles, Clipboard, Check, HelpCircle, RotateCcw } from 'lucide-react';
 import { useTaskStore } from '@/store/useTaskStore';
+
+import { getTaskExtractionPrompt } from '@/prompts/taskExtraction';
 
 interface TaskDumpProps {
   onProcess: (json: string) => void;
@@ -10,148 +12,178 @@ interface TaskDumpProps {
 }
 
 export default function TaskDump({ onProcess, isProcessing }: TaskDumpProps) {
-  const [userInput, setUserInput] = useState('');
+  const { tasks, originalText, setOriginalText } = useTaskStore();
+  const MAX_LENGTH = 1000;
   const [pastedJson, setPastedJson] = useState('');
   const [isCopied, setIsCopied] = useState(false);
-  const { tasks, clearTasks } = useTaskStore();
-
-  const PROMPT = `당신은 지능형 할 일 관리 전문 AI입니다. 사용자의 입력 문장에서 할 일들을 추출하고, 각 할 일의 특성에 맞춰 예상 소요 시간과 마감 기한을 분석하여 JSON 형식으로 반환하세요.
-
-추출 및 분석 규칙:
-1. title: 할 일 제목 (명명 규칙 준수 필수)
-   - **명확한 행동 중심**: 무엇을 해야 하는지 즉각적으로 알 수 있도록 명확한 행동 위주로 작성하세요.
-   - **명사형 어미 또는 동사 기본형**: 제목의 끝은 반드시 '명사형 어미(~기, ~함)'나 '동사 기본형'을 사용하세요.
-   - **간결함**: 불필요한 수식어나 문장 성분은 생략하고 핵심 행동 위주로 간결하게 작성하세요.
-   - **정보 분리**: 한 문장에 여러 행동이 포함된 경우 각각 독립된 할 일로 분리하세요.
-
-2. duration: 예상 소요 시간 (분 단위 숫자)
-   - 명시된 시간이 없다면 현실적인 시간을 예측하세요. (예: 물 마시기 5분, 환기 10분 등)
-
-3. deadline: 마감 기한 (ISO 8601 형식)
-   - 명확한 마감 기한이나 특정 시간 언급이 있는 경우에만 계산하여 입력하세요. 언급이 없는 경우 null로 설정하세요.
-   - 기준 시간: ${new Date().toLocaleString('ko-KR')}
-
-4. aiPriority: 1~10 사이의 중요도
-
-출력 형식 (반드시 JSON으로만 응답):
-{
-  "tasks": [
-    { "title": "할 일 제목", "duration": 10, "deadline": "ISO8601", "aiPriority": 5 }
-  ]
-}`;
+  const [autoDetected, setAutoDetected] = useState(false);
+  const hasTasks = tasks.length > 0;
 
   const handleCopyPrompt = () => {
-    const textToCopy = `${userInput}\n\n---\n\n${PROMPT}`;
+    const prompt = getTaskExtractionPrompt();
+    const textToCopy = `${originalText}\n\n---\n\n${prompt}`;
     navigator.clipboard.writeText(textToCopy);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };
 
-  const handleSubmit = () => {
-    if (!pastedJson.trim()) return;
-    onProcess(pastedJson);
-    setPastedJson('');
+  const handleSubmit = async (json?: string) => {
+    const targetJson = json || pastedJson;
+    if (!targetJson.trim()) return;
+    
+    try {
+      await onProcess(targetJson);
+      setPastedJson('');
+      if (json) {
+        setAutoDetected(true);
+        setTimeout(() => setAutoDetected(false), 3000);
+      }
+    } catch (error) {
+      // 에러는 onProcess 내부에서 처리됨
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedText = e.clipboardData.getData('text');
+    // JSON 구조가 포함되어 있는지 더 유연하게 확인
+    const hasJsonStructure = /["']tasks["']\s*:/i.test(pastedText) || (pastedText.includes('{') && pastedText.includes('}'));
+    
+    if (hasJsonStructure) {
+      e.preventDefault(); // 자동 추출 시 텍스트가 남지 않도록 기본 붙여넣기 방지
+      handleSubmit(pastedText);
+    }
+  };
+
+  const handleClearInput = () => {
+    if (confirm('입력한 내용을 모두 지우시겠습니까?')) {
+      setOriginalText('');
+    }
   };
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-8">
-      {tasks.length > 0 && (
-        <div className="flex justify-end">
-          <button
-            onClick={clearTasks}
-            className="text-slate-400 hover:text-red-500 text-sm flex items-center gap-1 transition-colors"
-          >
-            목록 초기화
-          </button>
-        </div>
-      )}
-
-      {/* Manual Section */}
+      {/* Task Input & Copy Section */}
       <section className="bg-white p-6 rounded-2xl border-2 border-slate-100 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 text-blue-600 font-bold text-lg">
-          <HelpCircle size={24} />
-          <h2>사용 방법</h2>
+        <div className="flex items-center justify-between select-none cursor-default">
+          <div className="flex items-center gap-2 text-slate-900 font-bold text-lg">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">1</div>
+            <Sparkles size={24} className="text-blue-600" />
+            <h2>{hasTasks ? '할 일 이어서 적기' : '할 일 적기'}</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            {originalText && (
+              <button
+                onClick={handleClearInput}
+                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                title="내용 지우기"
+              >
+                <RotateCcw size={20} />
+              </button>
+            )}
+            <button
+              onClick={handleCopyPrompt}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 ${
+                isCopied 
+                  ? 'bg-blue-50 border-blue-200 text-blue-600' 
+                  : 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700 shadow-md'
+              }`}
+            >
+              {isCopied ? <Check size={16} /> : <Clipboard size={16} />}
+              {isCopied ? '복사 완료!' : (hasTasks ? '추가 분석용 프롬프트 복사' : '분석용 프롬프트 복사')}
+            </button>
+          </div>
         </div>
         
-        <ol className="space-y-4 text-slate-600 text-sm sm:text-base">
-          <li className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">1</span>
-            <div className="flex-1">
-              <p className="font-semibold text-slate-900">할 일을 입력하세요.</p>
-              <textarea
-                className="w-full mt-2 p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all outline-none"
-                placeholder="예: 오늘 오후 3시에 회의하고, 저녁에 운동 가기"
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                rows={3}
-              />
-            </div>
-          </li>
-          <li className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">2</span>
-            <div>
-              <p className="font-semibold text-slate-900">복사하기를 누르세요.</p>
-              <p className="text-slate-500 text-xs mt-1">입력한 내용과 분석 프롬프트가 함께 복사됩니다.</p>
-              <button
-                onClick={handleCopyPrompt}
-                className={`mt-2 flex items-center gap-2 px-4 py-2 rounded-lg transition-all border-2 ${
-                  isCopied 
-                    ? 'bg-green-50 border-green-200 text-green-600' 
-                    : 'bg-slate-50 border-slate-100 text-slate-600 hover:border-blue-200 hover:text-blue-600'
-                }`}
-              >
-                {isCopied ? <Check size={16} /> : <Clipboard size={16} />}
-                {isCopied ? '복사 완료!' : '복사하기'}
-              </button>
-            </div>
-          </li>
-          <li className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">3</span>
-            <div>
-              <p className="font-semibold text-slate-900">사용하시는 AI에 붙여넣으세요.</p>
-              <p className="text-slate-500 text-xs mt-1">ChatGPT, Claude, 뤼튼 등 AI에게 복사한 내용을 전달하세요.</p>
-            </div>
-          </li>
-          <li className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold">4</span>
-            <div>
-              <p className="font-semibold text-slate-900">아래에 붙여넣으세요.</p>
-              <p className="text-slate-500 text-xs mt-1">AI의 JSON 답변을 아래 입력창에 붙여넣으세요.</p>
-            </div>
-          </li>
-        </ol>
+        <div className="relative">
+          <textarea
+            className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+            placeholder={hasTasks 
+              ? "추가로 생각난 할 일들을 여기에 적어보세요." 
+              : "여기에 생각난 할 일들을 자유롭게 적어보세요.\n예) 내일 오전 10시에 치과 가기, 보고서 작성 2시간 걸릴듯, 이번주 금요일까지 기획안 제출"
+            }
+            value={originalText}
+            onChange={(e) => setOriginalText(e.target.value.slice(0, MAX_LENGTH))}
+            rows={5}
+            maxLength={MAX_LENGTH}
+          />
+          <div className="absolute bottom-3 right-3 text-[10px] font-medium text-slate-400 select-none cursor-default">
+            {originalText.length} / {MAX_LENGTH}
+          </div>
+        </div>
+        <div className="flex items-start gap-2 p-4 bg-blue-50 rounded-xl text-blue-700 text-xs leading-relaxed select-none cursor-default">
+          <HelpCircle size={16} className="mt-0.5 flex-shrink-0" />
+          <p>
+            {hasTasks ? (
+              <>
+                내용을 적고 <strong>'추가 분석용 프롬프트 복사'</strong> 버튼을 누른 후 AI(ChatGPT, 뤼튼 등)에게 물어보세요.
+              </>
+            ) : (
+              <>
+                <strong>'분석용 프롬프트 복사'</strong> 버튼을 누른 후 AI(ChatGPT, 뤼튼 등)에게 물어보세요.
+              </>
+            )}
+          </p>
+        </div>
       </section>
 
       {/* Paste Section */}
-      <div className="space-y-4">
+      <section className="bg-white p-6 rounded-2xl border-2 border-slate-100 shadow-sm space-y-4">
+        <div className="flex items-center justify-between select-none cursor-default">
+          <div className="flex items-center gap-2 text-slate-900 font-bold text-lg">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">2</div>
+            <Check size={24} className="text-blue-600" />
+            <h2>{hasTasks ? '새로운 AI 답변 붙여넣기' : 'AI 답변 붙여넣기'}</h2>
+          </div>
+          {autoDetected && (
+            <div className="flex items-center gap-1.5 text-green-600 bg-green-50 px-3 py-1 rounded-full text-xs font-bold">
+              <Check size={14} />
+              자동 추출 완료!
+            </div>
+          )}
+        </div>
         <div className="relative">
           <textarea
-            className="w-full h-48 p-4 bg-white border-2 border-slate-200 rounded-2xl shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none font-mono text-sm text-slate-700 placeholder:text-slate-400"
-            placeholder={`AI의 JSON 답변을 여기에 붙여넣으세요.
-예:
-{
-  "tasks": [
-    { "title": "회의 준비하기", ... }
-  ]
-}`}
+            className={`w-full h-32 p-4 bg-slate-50 border-2 rounded-xl shadow-inner focus:ring-2 focus:ring-blue-100 outline-none font-mono text-sm text-slate-700 placeholder:text-slate-400 ${
+              autoDetected ? 'border-green-400 bg-green-50/30' : 'border-slate-100 focus:border-blue-500'
+            }`}
+            placeholder={hasTasks 
+              ? "AI가 새로 분석해준 답변을 여기에 붙여넣으세요." 
+              : "AI가 준 답변을 통째로 여기에 붙여넣으세요.\n자동으로 할 일이 추출됩니다."
+            }
             value={pastedJson}
             onChange={(e) => setPastedJson(e.target.value)}
+            onPaste={handlePaste}
             disabled={isProcessing}
           />
+          {isProcessing && (
+            <div className="absolute inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center rounded-2xl">
+              <div className="flex items-center gap-2 text-blue-600 font-bold">
+                <Sparkles size={20} />
+                처리 중...
+              </div>
+            </div>
+          )}
         </div>
-        <button
-          onClick={handleSubmit}
-          disabled={isProcessing || !pastedJson.trim()}
-          className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all ${
-            isProcessing || !pastedJson.trim()
-              ? 'bg-slate-300 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 active:scale-[0.98]'
-          }`}
-        >
-          <Sparkles size={20} className={isProcessing ? 'animate-spin' : ''} />
-          {'할 일 목록 생성하기'}
-        </button>
-      </div>
+        
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={() => handleSubmit()}
+            disabled={isProcessing || !pastedJson.trim()}
+            className={`w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 ${
+              isProcessing || !pastedJson.trim()
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200'
+            }`}
+          >
+            <Sparkles size={20} />
+            {pastedJson.trim() ? '할 일 목록 업데이트하기' : '답변을 기다리는 중...'}
+          </button>
+          
+          <p className="text-center text-slate-400 text-[11px] select-none cursor-default">
+            * 답변을 붙여넣으면 자동으로 분석되지만, 감지가 안 될 경우 위 버튼을 눌러주세요.
+          </p>
+        </div>
+      </section>
     </div>
   );
 }
